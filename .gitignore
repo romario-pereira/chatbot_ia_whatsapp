@@ -4,6 +4,8 @@ env/
 .env
 *env
 
+rag_files/processed/*.pdf
+
 # Arquivos Python
 __pycache__/
 *.py[cod]
