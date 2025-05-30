@@ -47,10 +47,32 @@ services:
     depends_on:
       - evolution-api
       - redis
+      - playwright
     restart: always
     volumes:
       - ./vectorstore_data:/app/vectorstore
       - ./rag_files:/app/rag_files
+
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    container_name: playwright
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    volumes:
+      - playwright_data:/ms-playwright
+    depends_on:
+      - bot
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
 
 volumes:
   evolution_instances:
@@ -58,3 +80,5 @@ volumes:
   redis:
   vectorstore_data:
   rag_files:
+  playwright_data:
+  prometheus_data:
