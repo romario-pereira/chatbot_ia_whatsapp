@@ -6,6 +6,7 @@ class SimulationSettings(BaseSettings):
     # Configurações do site
     SITE_URL: str = "https://ademicon.com.br/"
     SIMULATION_TIMEOUT: int = 120  # 2 minutos em segundos
+    SIMULATION_TIMEOUT_SECONDS: int = 120  # Alias para compatibilidade
     
     # Configurações de cache
     CACHE_TTL: int = 432000  # 5 dias em segundos

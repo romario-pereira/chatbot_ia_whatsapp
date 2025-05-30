@@ -32,4 +32,8 @@ class DataGenerationError(SimulationError):
 
 class ResponseFormatError(SimulationError):
     """Raised when there are issues formatting the response."""
+    pass
+
+class FormattingError(SimulationError):
+    """Exceção para erros de formatação de resposta."""
     pass 

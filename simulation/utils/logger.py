@@ -4,6 +4,26 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
+def get_logger(name: str = "simulation") -> logging.Logger:
+    """
+    Função utilitária para obter um logger configurado.
+    Compatível com o uso no SimulationService.
+    """
+    logger = logging.getLogger(name)
+    
+    if not logger.handlers:
+        logger.setLevel(logging.INFO)
+        
+        # Handler para console
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    
+    return logger
+
 class SimulationLogger:
     def __init__(self, name: str = "simulation"):
         self.logger = logging.getLogger(name)
