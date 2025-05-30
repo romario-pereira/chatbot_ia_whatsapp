@@ -146,4 +146,181 @@ class NavigatorAgent(BaseAgent):
 
     async def _extract_results(self, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extrai os resultados dos cartões de simulação."""
-        return [] 
+        page = context['page']
+        resultados = []
+        
+        try:
+            # Lista de seletores possíveis para os cartões
+            possible_selectors = [
+                '[data-aos="fade-up"]',
+                'div:has-text("Grupo:"):has-text("R$")',
+                'div:has-text("Valor do crédito")',
+                '.card:has-text("Grupo")',
+                '.simulation-result',
+                'div:has-text("meses"):has-text("R$")'
+            ]
+            
+            cartoes = None
+            selector_usado = None
+            
+            for selector in possible_selectors:
+                try:
+                    await page.wait_for_selector(selector, timeout=3000)
+                    cartoes_temp = await page.locator(selector).all()
+                    if cartoes_temp and len(cartoes_temp) > 0:
+                        # Filtra apenas cartões com conteúdo substancial
+                        cartoes_validos = []
+                        for cartao in cartoes_temp:
+                            texto = await cartao.text_content()
+                            if texto and len(texto.strip()) > 50 and 'R$' in texto:
+                                cartoes_validos.append(cartao)
+                        
+                        if cartoes_validos:
+                            cartoes = cartoes_validos
+                            selector_usado = selector
+                            print(f"Usando seletor: {selector} - {len(cartoes)} cartões encontrados")
+                            break
+                except:
+                    continue
+            
+            if not cartoes:
+                print("Nenhum seletor funcionou, usando método fallback...")
+                return await self._extract_results_fallback(page)
+            
+            # Processa os cartões encontrados
+            valores_processados = set()
+            
+            for idx, cartao in enumerate(cartoes):
+                if len(resultados) >= 3:  # Máximo 3 resultados
+                    break
+                    
+                try:
+                    texto_completo = await cartao.text_content()
+                    print(f"Analisando cartão {idx}...")
+                    
+                    if not texto_completo or len(texto_completo.strip()) < 50:
+                        continue
+                    
+                    # Verifica se contém informações de simulação (removido % da verificação)
+                    palavras_chave = ['R$', 'meses']
+                    if not any(palavra in texto_completo for palavra in palavras_chave):
+                        continue
+                    
+                    resultado = await self._parse_card_text(cartao, texto_completo)
+                    
+                    # Evita duplicatas baseadas no valor do crédito
+                    if resultado['valor_credito'] in valores_processados or resultado['valor_credito'] == 'N/A':
+                        continue
+                    
+                    valores_processados.add(resultado['valor_credito'])
+                    resultados.append(resultado)
+                    print(f"✓ Resultado válido: {resultado}")
+                        
+                except Exception as e:
+                    print(f"Erro ao processar cartão {idx}: {e}")
+                    continue
+                    
+        except Exception as e:
+            print(f"Erro geral na extração: {e}")
+            return await self._extract_results_fallback(page)
+        
+        print(f"Total de resultados únicos extraídos: {len(resultados)}")
+        return resultados if resultados else await self._extract_results_fallback(page)
+    
+    async def _parse_card_text(self, cartao, texto_completo: str) -> Dict[str, Any]:
+        """Parseia o texto do cartão para extrair as informações."""
+        import re
+        
+        # Inicializa resultado com estrutura simplificada
+        resultado = {
+            'grupo': 'Em Andamento',  # Sempre será "Em Andamento"
+            'valor_credito': 'N/A',
+            'meses': 'N/A',
+            'valor_parcela': 'N/A'
+        }
+        
+        # Valores em R$ - busca padrões mais específicos
+        valores_pattern = r'R\$\s*([\d.,]+(?:\.\d{3})*(?:,\d{2})?)'
+        valores_r = re.findall(valores_pattern, texto_completo)
+        
+        if len(valores_r) >= 2:
+            # Primeiro valor é geralmente o crédito, segundo é a parcela
+            resultado['valor_credito'] = f"R$ {valores_r[0]}"
+            resultado['valor_parcela'] = f"R$ {valores_r[1]}"
+        elif len(valores_r) == 1:
+            # Se só tem um valor, assumir que é o crédito
+            resultado['valor_credito'] = f"R$ {valores_r[0]}"
+        
+        # Meses - busca padrão específico
+        meses_match = re.search(r'(\d+)\s*meses', texto_completo, re.IGNORECASE)
+        if meses_match:
+            resultado['meses'] = f"{meses_match.group(1)} meses"
+        
+        return resultado
+    
+    async def _extract_results_fallback(self, page: Page) -> List[Dict[str, Any]]:
+        """Método fallback para extrair resultados quando os seletores primários falham."""
+        print("Executando extração fallback...")
+        resultados = []
+        
+        try:
+            # Captura todo o HTML da página
+            page_content = await page.content()
+            page_text = await page.locator('body').text_content()
+            
+            import re
+            
+            print("Analisando texto da página...")
+            
+            # Busca por padrões específicos de valores em R$
+            valores_credito = re.findall(r'R\$\s*([\d.,]+(?:\.\d{3})*(?:,\d{2})?)', page_text)
+            
+            # Busca por meses
+            meses_encontrados = re.findall(r'(\d+)\s*meses', page_text, re.IGNORECASE)
+            
+            print(f"Encontrado: {len(valores_credito)} valores, {len(meses_encontrados)} meses")
+            
+            # Se encontrou dados suficientes, monta os resultados
+            if len(valores_credito) >= 6:  # Pelo menos 3 pares (crédito + parcela)
+                valores_unicos = []
+                
+                # Agrupa valores em pares únicos
+                for i in range(0, len(valores_credito)-1, 2):
+                    if len(valores_unicos) >= 3:
+                        break
+                    
+                    credito = f"R$ {valores_credito[i]}"
+                    parcela = f"R$ {valores_credito[i+1]}"
+                    
+                    # Verifica se já existe esse valor de crédito
+                    if not any(r['valor_credito'] == credito for r in valores_unicos):
+                        resultado = {
+                            'grupo': 'Em Andamento',  # Sempre será "Em Andamento"
+                            'valor_credito': credito,
+                            'meses': f"{meses_encontrados[len(valores_unicos)]} meses" if len(valores_unicos) < len(meses_encontrados) else 'N/A',
+                            'valor_parcela': parcela
+                        }
+                        valores_unicos.append(resultado)
+                
+                resultados = valores_unicos
+            
+            if not resultados:
+                # Último recurso: resultado de erro
+                resultados = [{
+                    'grupo': 'Erro na extração',
+                    'valor_credito': 'N/A',
+                    'meses': 'N/A',
+                    'valor_parcela': 'N/A'
+                }]
+                
+        except Exception as e:
+            print(f"Erro no fallback: {e}")
+            resultados = [{
+                'grupo': 'Erro na extração',
+                'valor_credito': 'N/A',
+                'meses': 'N/A',
+                'valor_parcela': 'N/A'
+            }]
+        
+        print(f"Fallback retornou {len(resultados)} resultados")
+        return resultados 

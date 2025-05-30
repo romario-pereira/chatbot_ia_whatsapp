@@ -23,7 +23,11 @@ async def main():
         await nav_agent._fill_form(context)
         await nav_agent._accept_terms(context)
         await nav_agent._click_result(context)
-        print("Fluxo executado até o clique em Resultado!")
+        # Extrai e imprime os resultados
+        resultados = await nav_agent._extract_results(context)
+        print("Resultados extraídos:")
+        for r in resultados:
+            print(r)
     finally:
         await nav_agent._close_browser(context)
 
