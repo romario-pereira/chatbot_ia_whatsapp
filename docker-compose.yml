@@ -36,7 +36,17 @@ services:
       - redis:/data
     ports:
       - 6379:6379
-  
+
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    container_name: playwright
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    volumes:
+      - playwright_data:/ms-playwright
+
   bot:
     build: .
     container_name: bot
@@ -52,18 +62,6 @@ services:
     volumes:
       - ./vectorstore_data:/app/vectorstore
       - ./rag_files:/app/rag_files
-
-  playwright:
-    build:
-      context: .
-      dockerfile: Dockerfile.playwright
-    container_name: playwright
-    environment:
-      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-    volumes:
-      - playwright_data:/ms-playwright
-    depends_on:
-      - bot
 
   prometheus:
     image: prom/prometheus

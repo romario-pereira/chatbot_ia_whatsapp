@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.41.0-jammy
+FROM mcr.microsoft.com/playwright:v1.48.0-jammy
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
@@ -33,11 +33,11 @@ COPY requirements.txt .
 # Instalar dependências Python
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Instalar navegadores do Playwright
-RUN playwright install chromium
+# Instalar navegadores do Playwright usando python3 -m
+RUN python3 -m playwright install chromium
 
 # Expor porta
 EXPOSE 8000
 
-# Comando para iniciar
-CMD ["python3", "-m", "playwright", "install", "chromium"] 
+# Comando para manter o container rodando
+CMD ["tail", "-f", "/dev/null"] 

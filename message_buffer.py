@@ -6,6 +6,7 @@ from collections import defaultdict
 from config import REDIS_URL, BUFFER_KEY_SUFIX, DEBOUNCE_SECONDS, BUFFER_TTL
 from evolution_api import send_whatsapp_message
 from chains import get_conversational_rag_chain
+from consortium_handler import consortium_handler
 
 
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
@@ -41,7 +42,26 @@ async def handle_debounce(chat_id: str):
 
         full_message = ' '.join(messages).strip()
         if full_message:
-            log(f'Enviando mensagem agrupada para {chat_id}: {full_message}')
+            log(f'Processando mensagem agrupada para {chat_id}: {full_message}')
+            
+            # NOVA LÓGICA: Verificar se é solicitação de consórcio
+            try:
+                if await consortium_handler.should_handle_message(full_message):
+                    log(f'[CONSORTIUM] Detectado pedido de consórcio para {chat_id}')
+                    handled = await consortium_handler.process_consortium_request(chat_id, full_message)
+                    
+                    if handled:
+                        log(f'[CONSORTIUM] Processamento concluído para {chat_id}')
+                        await redis_client.delete(buffer_key)
+                        return
+                    else:
+                        log(f'[CONSORTIUM] Baixa confiança, seguindo fluxo RAG normal')
+                        
+            except Exception as e:
+                log(f'[CONSORTIUM] Erro no handler: {e}, seguindo fluxo normal')
+            
+            # FLUXO NORMAL: RAG + LangChain
+            log(f'Enviando para RAG/LangChain: {chat_id}')
             ai_response = conversational_rag_chain.invoke(
                 input={'input': full_message},
                 config={'configurable': {'session_id': chat_id}},
@@ -51,6 +71,7 @@ async def handle_debounce(chat_id: str):
                 number=chat_id,
                 text=ai_response,
             )
+            
         await redis_client.delete(buffer_key)
 
     except asyncio.CancelledError:
