@@ -236,8 +236,16 @@ class NavigatorAgent(BaseAgent):
             'grupo': 'Em Andamento',  # Sempre será "Em Andamento"
             'valor_credito': 'N/A',
             'meses': 'N/A',
-            'valor_parcela': 'N/A'
+            'valor_parcela': 'N/A',
+            'mensagem_especial': None  # Para mensagens especiais como "Parcelas reduzidas"
         }
+        
+        # Busca por mensagem especial de parcelas reduzidas
+        if 'Parcelas reduzidas calculadas' in texto_completo:
+            # Extrai o parágrafo completo que contém essa mensagem
+            mensagem_match = re.search(r'Parcelas reduzidas calculadas[^.]*\.?[^.]*\.?', texto_completo, re.IGNORECASE)
+            if mensagem_match:
+                resultado['mensagem_especial'] = mensagem_match.group(0).strip()
         
         # Valores em R$ - busca padrões mais específicos
         valores_pattern = r'R\$\s*([\d.,]+(?:\.\d{3})*(?:,\d{2})?)'
@@ -278,7 +286,16 @@ class NavigatorAgent(BaseAgent):
             # Busca por meses
             meses_encontrados = re.findall(r'(\d+)\s*meses', page_text, re.IGNORECASE)
             
+            # Busca por mensagem especial
+            mensagem_especial = None
+            if 'Parcelas reduzidas calculadas' in page_text:
+                mensagem_match = re.search(r'Parcelas reduzidas calculadas[^.]*\.?[^.]*\.?', page_text, re.IGNORECASE)
+                if mensagem_match:
+                    mensagem_especial = mensagem_match.group(0).strip()
+            
             print(f"Encontrado: {len(valores_credito)} valores, {len(meses_encontrados)} meses")
+            if mensagem_especial:
+                print(f"Mensagem especial encontrada: {mensagem_especial}")
             
             # Se encontrou dados suficientes, monta os resultados
             if len(valores_credito) >= 6:  # Pelo menos 3 pares (crédito + parcela)
@@ -298,7 +315,8 @@ class NavigatorAgent(BaseAgent):
                             'grupo': 'Em Andamento',  # Sempre será "Em Andamento"
                             'valor_credito': credito,
                             'meses': f"{meses_encontrados[len(valores_unicos)]} meses" if len(valores_unicos) < len(meses_encontrados) else 'N/A',
-                            'valor_parcela': parcela
+                            'valor_parcela': parcela,
+                            'mensagem_especial': mensagem_especial  # Adiciona a mensagem especial se encontrada
                         }
                         valores_unicos.append(resultado)
                 
@@ -310,7 +328,8 @@ class NavigatorAgent(BaseAgent):
                     'grupo': 'Erro na extração',
                     'valor_credito': 'N/A',
                     'meses': 'N/A',
-                    'valor_parcela': 'N/A'
+                    'valor_parcela': 'N/A',
+                    'mensagem_especial': None
                 }]
                 
         except Exception as e:
@@ -319,7 +338,8 @@ class NavigatorAgent(BaseAgent):
                 'grupo': 'Erro na extração',
                 'valor_credito': 'N/A',
                 'meses': 'N/A',
-                'valor_parcela': 'N/A'
+                'valor_parcela': 'N/A',
+                'mensagem_especial': None
             }]
         
         print(f"Fallback retornou {len(resultados)} resultados")
